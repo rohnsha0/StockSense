@@ -7,6 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
 from fastapi import FastAPI
 from mangum import Mangum
+import pandas as pd
 
 app = FastAPI()
 handler = Mangum(app)
@@ -14,27 +15,32 @@ handler = Mangum(app)
 
 @app.get("/")
 async def root():
-    response= {
+    response = {
         "message": "stockSense API backend",
-        "version_info": "1.3.0"
+        "version_info": "2023.8.17.1"
     }
     return response
 
 
 @app.get("/query/{symbol}")
 async def query(symbol: str):
-    ticker = yf.Ticker(symbol)
-    stock_info = ticker.info
-    stock_name = stock_info.get('longName')
-    data= yf.download(symbol, interval='1d')
-    JSONresponse= {
+    try:
+        stock = symbol.split(".", 1)[0]
+        df = pd.read_csv('equity_bse.csv')
+        result = df.loc[df["SYMBOL"] == stock, "STOCK"]
+        stock_name= result.values[0]
+    except:
+        stock_name= symbol
+
+    data = yf.download(symbol, interval='1d')
+    JSONresponse = {
         "stock_name": stock_name,
-        "t1": data['Close'].iloc[-1],
-        "t2": data['Close'].iloc[-2],
-        "t3": data['Close'].iloc[-3],
-        "t4": data['Close'].iloc[-4],
-        "t5": data['Close'].iloc[-5],
-        "t6": data['Close'].iloc[-6]
+        "t1": data['Close'].iloc[-2],
+        "t2": data['Close'].iloc[-3],
+        "t3": data['Close'].iloc[-4],
+        "t4": data['Close'].iloc[-5],
+        "t5": data['Close'].iloc[-6],
+        "t6": data['Close'].iloc[-7]
     }
     return JSONresponse
 
@@ -57,13 +63,52 @@ async def info(symbol: str):
 
 @app.get("/ltp/{symbol}")
 async def ltp(symbol):
-    data= yf.download(symbol, interval='1m', period='1d')
-    ltp= (data['Close'].iloc[-1])
-    previous_close= data['Close'].iloc[0]
-    response={
+    data = yf.download(symbol, interval='1m', period='1d')
+    ltp = (data['Close'].iloc[-1])
+    previous_close = yf.download(symbol, interval='1d')['Close'].iloc[-1]
+    response = {
         "ltp": round(ltp, 2),
         "change": changePositiveNegative(ltp=ltp, previous_close=previous_close)
     }
+    return response
+
+@app.get("/technical/{symbol}")
+async def technicals(symbol):
+    stock = symbol.split(".", 1)[0]
+    df = pd.read_csv('equity_bse.csv')
+    result = df.loc[df["SYMBOL"] == stock, ["FaceValue", "ISIN", "IndustryNew"]]
+    print(result)
+
+    data= yf.download(symbol, period="1y")
+    sma50= data['Close'].rolling(window=50).mean().iloc[-1]
+    ema50= data['Close'].ewm(span=50, adjust=False).mean().iloc[-1]
+    sma100 = data['Close'].rolling(window=100).mean().iloc[-1]
+    ema100 = data['Close'].ewm(span=100, adjust=False).mean().iloc[-1]
+    sma200 = data['Close'].rolling(window=200).mean().iloc[-1]
+    ema200 = data['Close'].ewm(span=200, adjust=False).mean().iloc[-1]
+    rsi= 100 - (100 / (1 + (data['Close'].diff(1).fillna(0) > 0).rolling(window=14).mean())).iloc[-1]
+    macd = data['Close'].ewm(span=12, adjust=False).mean() - data['Close'].ewm(span=26, adjust=False).mean()
+    bollingerBandUpper= data['Close'].rolling(window=20).mean() + 2 * data['Close'].rolling(window=20).std()
+    bollingerBandLower = data['Close'].rolling(window=20).mean() - 2 * data['Close'].rolling(window=20).std()
+    atr= data['High'].rolling(window=14).max() - data['Low'].rolling(window=14).min()
+
+    response= {
+        "faceValue": result["FaceValue"].values[0],
+        "ISIN": result["ISIN"].values[0],
+        "industry": result["IndustryNew"].values[0],
+        "sma50": sma50,
+        "ema50": ema50,
+        "sma100": sma100,
+        "ema100": ema100,
+        "sma200": sma200,
+        "ema200": ema200,
+        "rsi": rsi,
+        "macd": macd.iloc[-1],
+        "bollingerBandUpper": bollingerBandUpper.iloc[-1],
+        "bollingerBankLoweer": bollingerBandLower.iloc[-1],
+        "atr": atr.iloc[-1]
+    }
+
     return response
 
 
@@ -117,10 +162,12 @@ def predictionFunction(symbol, realData):
 
 
 def changePositiveNegative(ltp, previous_close):
-    change= (ltp-previous_close)
-    if(change>0):
+    change = (ltp - previous_close)
+    print(change)
+    print(previous_close)
+    if (change > 0):
         return "POSITIVE"
-    elif(change<0):
+    elif (change < 0):
         return "NEGATIVE"
     else:
         return "NEUTRAL"
