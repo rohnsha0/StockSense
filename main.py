@@ -17,7 +17,7 @@ handler = Mangum(app)
 async def root():
     response = {
         "message": "stockSense API backend",
-        "version_info": "2023.8.17.1"
+        "version_info": "2023.8.19.3"
     }
     return response
 
@@ -41,6 +41,35 @@ async def query(symbol: str):
         "t4": data['Close'].iloc[-5],
         "t5": data['Close'].iloc[-6],
         "t6": data['Close'].iloc[-7]
+    }
+    return JSONresponse
+
+@app.get("/query/v2/{symbol}")
+async def query(symbol: str):
+    try:
+        stock = symbol.split(".", 1)[0]
+        df = pd.read_csv('equity_bse.csv')
+        result = df.loc[df["SYMBOL"] == stock, "STOCK"]
+        stock_name= result.values[0]
+    except:
+        stock_name= symbol
+
+    data = yf.download(symbol, interval='1d')
+    print(data.tail())
+    JSONresponse = {
+        "stock_name": stock_name,
+        "t1": data['Close'].iloc[-2],
+        "d1": data.index[-2].strftime('%b %d, %Y'),
+        "t2": data['Close'].iloc[-3],
+        "d2": data.index[-3].strftime('%b %d, %Y'),
+        "t3": data['Close'].iloc[-4],
+        "d3": data.index[-4].strftime('%b %d, %Y'),
+        "t4": data['Close'].iloc[-5],
+        "d4": data.index[-5].strftime('%b %d, %Y'),
+        "t5": data['Close'].iloc[-6],
+        "d5": data.index[-6].strftime('%b %d, %Y'),
+        "t6": data['Close'].iloc[-7],
+        "d6": data.index[-7].strftime('%b %d, %Y')
     }
     return JSONresponse
 
