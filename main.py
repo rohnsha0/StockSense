@@ -1,23 +1,23 @@
 import os.path
+import pickle
+from datetime import datetime
 import numpy as np
 import pandas as pd
-import yfinance as yf
-from datetime import datetime
-from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
+import yfinance as yf
 from fastapi import FastAPI
 from mangum import Mangum
-import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
 app = FastAPI()
 handler = Mangum(app)
-
 
 @app.get("/")
 async def root():
     response = {
         "message": "stockSense API backend",
-        "version_info": "2023.8.19.3"
+        "version_info": "2.1.7",
+        "changelog": "added stockInfo details and new function i.e. queryV3"
     }
     return response
 
@@ -43,6 +43,66 @@ async def query(symbol: str):
         "t6": data['Close'].iloc[-7]
     }
     return JSONresponse
+
+@app.get("/query/v3/{symbol}")
+async def queryV3(symbol: str):
+    start_date = "2022-09-01"
+
+    try:
+        if symbol.split('.')[1] == "NS":
+            print("nse")
+            dfNSE = pd.read_csv('equity_nse.csv')
+            resultNSE = dfNSE.loc[dfNSE["SYMBOL"] == symbol.split('.')[0], ["COMPANY", "ISIN", "FACE_VALUE"]]
+            print(resultNSE["COMPANY"].values[0])
+            stockISIN = resultNSE["ISIN"].values[0]
+            stockFV = int(resultNSE["FACE_VALUE"].values[0])
+            stockCompany= resultNSE["COMPANY"].values[0]
+            try:
+                df = pd.read_csv('equity_bse.csv')
+                result = df.loc[df["SYMBOL"] == symbol.split('.')[0], ["IndustryNew"]]
+                stockIndustry = result["IndustryNew"].values[0]
+            except:
+                stockIndustry = ""
+        else:
+            if symbol.split('.')[1] == "BO":
+                print("BSE")
+                df = pd.read_csv('equity_bse.csv')
+                result = df.loc[df["SYMBOL"] == symbol.split('.')[0], ["FaceValue", "ISIN", "IndustryNew", "STOCK"]]
+                stockIndustry = result["IndustryNew"].values[0]
+                stockISIN = result["ISIN"].values[0]
+                stockFV = result["FaceValue"].values[0]
+                stockCompany= result["STOCK"].values[0]
+    except:
+        stockIndustry = "na"
+        stockISIN = "na"
+        stockFV = "na"
+        stockCompany= symbol
+
+    data = yf.download(symbol, interval='1d', start=start_date)
+    response= {
+        "isin": stockISIN,
+        "indusry": stockIndustry,
+        "face_value": stockFV,
+        "company": stockCompany,
+        "W52High": data['High'].max(),
+        "W52Low": data['Low'].min(),
+        "dayLow": data['Low'][-1],
+        "dayHigh": data['High'][-1],
+        "dayOpen": data["Open"].iloc[-1],
+        "t1": data['Close'].iloc[-2],
+        "d1": data.index[-2].strftime('%b %d, %Y'),
+        "t2": data['Close'].iloc[-3],
+        "d2": data.index[-3].strftime('%b %d, %Y'),
+        "t3": data['Close'].iloc[-4],
+        "d3": data.index[-4].strftime('%b %d, %Y'),
+        "t4": data['Close'].iloc[-5],
+        "d4": data.index[-5].strftime('%b %d, %Y'),
+        "t5": data['Close'].iloc[-6],
+        "d5": data.index[-6].strftime('%b %d, %Y'),
+        "t6": data['Close'].iloc[-7],
+        "d6": data.index[-7].strftime('%b %d, %Y')
+    }
+    return response
 
 @app.get("/query/v2/{symbol}")
 async def query(symbol: str):
@@ -159,17 +219,47 @@ async def prediction(symbol: str):
     realData = [modelInp[len(modelInp) - 60:len(modelInp + 1), 0]]
     realData = np.array(realData)
     realData = np.reshape(realData, newshape=(realData.shape[0], realData.shape[1], 1))
-    predic = predictionFunction(symbol, realData)
+    predic = predictionFunction(symbol, realData, 'exports')
     prediction_scaled = scaler.inverse_transform(predic)
     jsonData = {
         "predicted_close": float(prediction_scaled[0][0])
     }
     return jsonData
 
+@app.get("/prediction/hr/{symbol}")
+def hourlyPrediction(symbol: str):
+    prediction= performPrediction('2021-08-25', '2023-06-01', symbol)
+    jsonData = {
+        "predicted_close": float(prediction[0][0])
+    }
+    return jsonData
 
-def predictionFunction(symbol, realData):
+def performPrediction(start_date:str, end_date: str, symbol: str):
+    data_path= os.path.join('hourlyExports', 'datas', f'{symbol}-data.csv')
+    scaler_path= os.path.join('hourlyExports', 'scalers', f'{symbol}-scaler.pkl')
+    df = pd.read_csv(data_path)
+    df = df.reset_index()
+    trainSet = df.iloc[:, 1:2].values
+
+    with open(scaler_path, 'rb') as f:
+        trainingSetScaledSaved = pickle.load(f)
+
+    testDF = yf.download(symbol, interval= '1h', start=end_date, end=datetime.now())
+    realSP = testDF['Close'].values
+    dfTotal = pd.concat((df['Open'], testDF['Open']), axis=0)
+    modelInp = dfTotal[len(dfTotal) - len(testDF) - 60:].values
+    modelInp = modelInp.reshape(-1, 1)
+    modelInp = trainingSetScaledSaved.transform(modelInp)
+    realData = [modelInp[len(modelInp) - 60:len(modelInp + 1), 0]]
+    realData = np.array(realData)
+    realData = np.reshape(realData, newshape=(realData.shape[0], realData.shape[1], 1))
+    predic = predictionFunction(symbol, realData, 'hourlyExports')
+    prediction_scaled = trainingSetScaledSaved.inverse_transform(predic)
+    return prediction_scaled
+
+def predictionFunction(symbol, realData, folderName: str):
     interpreter = tf.lite.Interpreter(
-        model_path=os.path.join('exports', f'{symbol}.tflite'))
+        model_path=os.path.join(folderName, f'{symbol}.tflite'))
     interpreter.allocate_tensors()
 
     # Get input and output details from the model
