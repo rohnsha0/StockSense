@@ -19,7 +19,7 @@ grpcio==1.56.0
 h11==0.14.0
 h5py==3.9.0
 html5lib==1.1
-idna==3.4
+idna==3.7
 jax==0.4.13
 joblib==1.2.0
 keras==2.12.0
