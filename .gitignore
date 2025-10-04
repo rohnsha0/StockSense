@@ -1,3 +1,11 @@
 .space
 .ipynb_checkpoints/
 __pycache__/
+.idea/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.db
+.env
+.envv/

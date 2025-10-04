@@ -104,4 +104,5 @@ uv==0.7.3
 virtualenv==20.28.0
 wheel==0.45.1
 wifite==2.7.0
+yfinance==0.2.32
 zstandard==0.23.0
