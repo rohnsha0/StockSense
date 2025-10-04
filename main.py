@@ -178,57 +178,29 @@ async def ltp(symbol):
 
 
 @app.get("/technical/{symbol}")
-async def technicals(symbol):
-    stock = symbol.split(".", 1)[0]
-    df = pd.read_csv("equity_bse.csv")
-    result = df.loc[df["SYMBOL"] == stock, ["FaceValue", "ISIN", "IndustryNew"]]
-    print(result)
-
-    data = yf.download(symbol, period="1y")
-    sma50 = data["Close"].rolling(window=50).mean().iloc[-1]
-    ema50 = data["Close"].ewm(span=50, adjust=False).mean().iloc[-1]
-    sma100 = data["Close"].rolling(window=100).mean().iloc[-1]
-    ema100 = data["Close"].ewm(span=100, adjust=False).mean().iloc[-1]
-    sma200 = data["Close"].rolling(window=200).mean().iloc[-1]
-    ema200 = data["Close"].ewm(span=200, adjust=False).mean().iloc[-1]
-    rsi = (
-        100
-        - (
-            100 / (1 + (data["Close"].diff(1).fillna(0) > 0).rolling(window=14).mean())
-        ).iloc[-1]
-    )
-    macd = (
-        data["Close"].ewm(span=12, adjust=False).mean()
-        - data["Close"].ewm(span=26, adjust=False).mean()
-    )
-    bollingerBandUpper = (
-        data["Close"].rolling(window=20).mean()
-        + 2 * data["Close"].rolling(window=20).std()
-    )
-    bollingerBandLower = (
-        data["Close"].rolling(window=20).mean()
-        - 2 * data["Close"].rolling(window=20).std()
-    )
-    atr = data["High"].rolling(window=14).max() - data["Low"].rolling(window=14).min()
-
-    response = {
-        "faceValue": result["FaceValue"].values[0],
-        "ISIN": result["ISIN"].values[0],
-        "industry": result["IndustryNew"].values[0],
-        "sma50": sma50,
-        "ema50": ema50,
-        "sma100": sma100,
-        "ema100": ema100,
-        "sma200": sma200,
-        "ema200": ema200,
-        "rsi": rsi,
-        "macd": macd.iloc[-1],
-        "bollingerBandUpper": bollingerBandUpper.iloc[-1],
-        "bollingerBankLoweer": bollingerBandLower.iloc[-1],
-        "atr": atr.iloc[-1],
-    }
-
-    return response
+async def technicals(symbol: str):
+    """Get comprehensive technical indicators for a stock symbol"""
+    try:
+        from technical_analysis import get_comprehensive_technical_indicators
+        
+        # Get comprehensive technical indicators
+        result = get_comprehensive_technical_indicators(symbol, period="1y", use_cache=True)
+        
+        if result.get('status') == 'error':
+            return {
+                "symbol": symbol,
+                "error": result.get('message', 'Unknown error'),
+                "status": "error"
+            }
+        
+        return result
+        
+    except Exception as e:
+        return {
+            "symbol": symbol,
+            "error": f"Failed to get technical indicators: {str(e)}",
+            "status": "error"
+        }
 
 
 @app.get("/fundamentals/{symbol}")
