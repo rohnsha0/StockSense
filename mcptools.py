@@ -2,6 +2,7 @@ from mcp.server.fastmcp import FastMCP
 import pandas as pd
 import yfinance as yf
 from main import fetchStockPrediction
+from fundamentals import get_stock_fundamentals_analysis
 
 mcp = FastMCP(name="stocksense")
 
@@ -310,6 +311,33 @@ def get_historical_stock_prices_by_date(symbol: str, start_date: str, end_date: 
             "symbol": symbol,
             "start_date": start_date,
             "end_date": end_date
+        }
+
+
+@mcp.tool()
+def get_stock_fundamentals(symbol: str) -> dict:
+    """Get detailed stock fundamentals like P/E, market cap, growth metrics, quality scores, and investment analysis
+    
+    Args:
+        symbol: Stock symbol (e.g., AAPL, MSFT, RELIANCE.NS)
+        
+    Returns:
+        Dict containing comprehensive fundamental analysis data including:
+        - Financial performance (revenue growth, margins, ROE, ROA, ROIC)
+        - Valuation metrics (P/E, P/B, P/S, EV/EBITDA, PEG ratio)
+        - Balance sheet analysis (debt levels, cash position, working capital)
+        - Growth analysis (revenue/earnings CAGR)
+        - Quality scores (Piotroski F-Score, Altman Z-Score)
+        - Peer comparison (industry averages)
+        - Investment thesis (strengths, concerns, overall rating)
+    """
+    try:
+        return get_stock_fundamentals_analysis(symbol)
+    except Exception as e:
+        return {
+            "symbol": symbol,
+            "error": f"Failed to get fundamentals analysis: {str(e)}",
+            "analysis_date": pd.Timestamp.now().isoformat()
         }
 
 

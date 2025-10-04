@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from mangum import Mangum
 from sklearn.preprocessing import MinMaxScaler
 from chat import main as chat_main
+from fundamentals import get_stock_fundamentals_analysis
 
 app = FastAPI(title="StockSense API", description="API for StockSense", version="2.1.7")
 handler = Mangum(app)
@@ -228,6 +229,20 @@ async def technicals(symbol):
     }
 
     return response
+
+
+@app.get("/fundamentals/{symbol}")
+async def fundamentals(symbol: str):
+    """Get comprehensive stock fundamentals analysis"""
+    try:
+        analysis = get_stock_fundamentals_analysis(symbol)
+        return analysis
+    except Exception as e:
+        return {
+            "symbol": symbol,
+            "error": f"Failed to get fundamentals analysis: {str(e)}",
+            "analysis_date": pd.Timestamp.now().isoformat()
+        }
 
 
 @app.get("/prediction/{symbol}")
